@@ -2,17 +2,13 @@
 
 ## Installation
 
-Clone the repo and install packages
+Clone the repo, clone the game repo and install packages
 
 ```sh
-git clone <url here>
-npm i
-```
-
-Clone the game repo to .game
-
-```sh
+git clone https://github.com/subnet-/bitburner
+cd bitburner
 git clone https://github.com/bitburner-official/bitburner-src.git .game
+npm i
 ```
 
 Enter your Bitburner API key inside `.vscode/settings.json`
