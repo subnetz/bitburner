@@ -24,6 +24,8 @@ export async function locateTailWindow(
 	ns: NS
 ): Promise<HTMLElement | undefined> {
 	ns.tail();
+	ns.print('Loading...');
+	await ns.asleep(250);
 	let identifier = crypto.randomUUID();
 	ns.setTitle(identifier);
 	let modals: HTMLElement[] = Array.from(doc.querySelectorAll(`.drag > h6`));
@@ -34,9 +36,8 @@ export async function locateTailWindow(
 		console.error('tail window not found, returning');
 		return;
 	}
-	setTimeout(() => {
-		tailWindow!.textContent = tailWindow!.getAttribute('title');
-	}, 0);
+	tailWindow!.textContent = tailWindow!.getAttribute('title');
+	ns.clearLog();
 
 	return <HTMLElement>(
 		tailWindow.parentElement!.nextElementSibling!.firstElementChild!
@@ -45,7 +46,7 @@ export async function locateTailWindow(
 
 export function createElement(
 	type: string,
-	attributes: Object | null,
+	attributes: Object | undefined = undefined,
 	...children
 ): HTMLElement {
 	const doc = eval('document') as Document;
@@ -61,6 +62,10 @@ export function createElement(
 			el.textContent = child;
 		} else if (child instanceof HTMLElement) {
 			el.appendChild(child);
+		} else if (typeof child == 'number') {
+			el.textContent = String(child);
+		} else if (typeof child == 'boolean') {
+			el.textContent = String(child);
 		} else {
 			console.error(child);
 		}
@@ -97,7 +102,7 @@ export function createTableHeader(
 	}
 	return createElement(
 		'tr',
-		null,
+		{ style: { position: 'sticky', top: '0' } },
 		header.map((child) => createElement('th', { style: style }, child))
 	);
 }

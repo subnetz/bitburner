@@ -2,30 +2,26 @@ import { NS } from '../..';
 import type React_Type from 'react';
 import * as html from '/lib/html';
 import { doc, win } from '/lib/html';
+import { formatTime } from '/lib/formatTime';
 declare var React: typeof React_Type;
 let data;
 let windowSize;
 let anchor;
 export async function main(ns: NS) {
-	ns.tail();
-	ns.clearLog();
 	ns.disableLog('ALL');
-	ns.setTitle('Timer');
-	ns.resizeTail(540, 61);
-	ns.moveTail(2300, 2);
 	if (!data) data = {};
 	windowSize = -1;
 
 	anchor = await html.locateTailWindow(ns);
-	appendToAnchor();
+	ns.resizeTail(540, 61);
+	ns.moveTail(2300, 2);
+	ns.setTitle('Timer');
+	let table = createTable();
 
 	ns.atExit(quit);
 
-	let identifier = crypto.randomUUID();
-	ns.setTitle(identifier);
-
 	while (true) {
-		doStuff(ns);
+		doStuff(ns, table);
 		await ns.asleep(1000);
 	}
 }
@@ -34,29 +30,7 @@ function quit() {
 	if (anchor) anchor.firstElementChild.remove();
 }
 
-function now() {
-	return new Date().toLocaleDateString('de-DE', {
-		year: 'numeric',
-		month: '2-digit',
-		day: '2-digit',
-		hour: '2-digit',
-		minute: '2-digit',
-		second: '2-digit',
-	});
-}
-
-function formatTime(ms) {
-	const date = new Date(ms);
-	return (
-		String(date.getMinutes()).padStart(2, '0') +
-		':' +
-		String(date.getSeconds()).padStart(2, '0')
-	);
-}
-
-async function doStuff(ns: NS) {
-	// let doc = eval('document') as Document;
-	let table: any = doc.querySelector('#timer_table_main');
+async function doStuff(ns: NS, table: HTMLElement) {
 	// read new jobs on port
 	let prt = ns.getPortHandle(1);
 	while (!prt.empty()) {
@@ -101,7 +75,7 @@ async function doStuff(ns: NS) {
 		if (newSize != windowSize) {
 			windowSize = newSize;
 			//ns.resizeTail(500, windowSize * 60 + 60);
-			let resize = table.closest('.react-resizable');
+			let resize = <HTMLElement>table.closest('.react-resizable');
 			if (resize) {
 				resize.style.height = windowSize * 30 + 62 + 'px';
 			}
@@ -300,7 +274,7 @@ function createTableEntry(ns, server) {
 	];
 }
 
-function appendToAnchor() {
+function createTable(): HTMLElement {
 	let node: HTMLElement = html.createTable();
 	node.appendChild(
 		html.createTableHeader([
@@ -311,7 +285,6 @@ function appendToAnchor() {
 			'Time (max)',
 		])
 	);
-	if (anchor) {
-		anchor.appendChild(node);
-	}
+	anchor.appendChild(node);
+	return node;
 }
