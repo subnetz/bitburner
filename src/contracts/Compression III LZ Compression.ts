@@ -135,4 +135,10 @@ export async function main(ns: NS) {
 	} else {
 		ns.tprintf('ERROR Unittests: Some Unittests failed!');
 	}
+	ns.tprintf(
+		'Solution for "oyjEUxIyjEUxcyjEUxcyjcyj8fj8fj8fjjo13x118lWTsN118118118121811812":\n' +
+			compress(
+				'oyjEUxIyjEUxcyjEUxcyjcyj8fj8fj8fjjo13x118lWTsN118118118121811812'
+			)
+	);
 }

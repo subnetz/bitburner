@@ -1,55 +1,37 @@
 import { NS } from '../..';
 import type React_Type from 'react';
 import * as html from '/lib/html';
+import { doc, win } from '/lib/html';
 declare var React: typeof React_Type;
-let ns: NS;
-let data = {};
-let windowSize = -1;
-let anchorID = 'Timer_Table_Anchor';
-export async function main(_ns: NS) {
-	ns = _ns;
-	ns.clearLog();
-	createHTMLAnchor();
-	ns.disableLog('ALL');
+let data;
+let windowSize;
+let anchor;
+export async function main(ns: NS) {
 	ns.tail();
-	ns.resizeTail(540, 0);
-	ns.moveTail(2300, 2);
-	singleton();
-
+	ns.clearLog();
+	ns.disableLog('ALL');
 	ns.setTitle('Timer');
+	ns.resizeTail(540, 61);
+	ns.moveTail(2300, 2);
+	if (!data) data = {};
+	windowSize = -1;
 
-	start();
+	anchor = await html.locateTailWindow(ns);
+	appendToAnchor();
+
 	ns.atExit(quit);
 
+	let identifier = crypto.randomUUID();
+	ns.setTitle(identifier);
+
 	while (true) {
-		doStuff();
+		doStuff(ns);
 		await ns.asleep(1000);
 	}
 }
 
-function singleton() {
-	let filename = ns.getScriptName();
-	let multi = ns.ps().filter((p) => p.filename == filename);
-	if (multi.length > 1) {
-		multi.forEach((p) => {
-			if (p.pid != ns.pid) {
-				ns.closeTail(p.pid);
-				ns.kill(p.pid);
-			}
-		});
-	}
-}
-
-function start() {
-	let previous = ns.readPort(2);
-	if (previous != 'NULL PORT DATA') {
-		data = JSON.parse(String(previous));
-	}
-}
-
 function quit() {
-	ns.writePort(2, JSON.stringify(data));
-	deleteHTMLAnchor();
+	if (anchor) anchor.firstElementChild.remove();
 }
 
 function now() {
@@ -63,12 +45,6 @@ function now() {
 	});
 }
 
-// function formatTime(millis) {
-// 	let minutes: number = Math.floor(millis / 60000);
-// 	let seconds: any = ((millis % 60000) / 1000).toFixed(0);
-// 	return minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
-// }
-
 function formatTime(ms) {
 	const date = new Date(ms);
 	return (
@@ -78,27 +54,9 @@ function formatTime(ms) {
 	);
 }
 
-async function doStuff() {
-	let doc = eval('document') as Document;
+async function doStuff(ns: NS) {
+	// let doc = eval('document') as Document;
 	let table: any = doc.querySelector('#timer_table_main');
-	/*
-		ns.writePort(1, JSON.stringify({
-			operation: 'hack',
-			target: hostname,
-			timestamp: Date.now(),
-			finishTime: Date.now() + server.times.weakenTime,
-			pids: [
-				{ type: 'hack', 	pid: pid1 },
-				{ type: 'grow', 	pid: pid2 },
-				{ type: 'weaken', 	pid: pid3 }
-			],
-			threads: [
-				{ type: 'hack',		threads: hackThreads},
-				{ type: 'grow',		threads: growThreads},
-				{ type: 'weaken',	threads: weakenGrowThreads + weakenHackThreads}
-			]
-		}));
-	*/
 	// read new jobs on port
 	let prt = ns.getPortHandle(1);
 	while (!prt.empty()) {
@@ -145,7 +103,7 @@ async function doStuff() {
 			//ns.resizeTail(500, windowSize * 60 + 60);
 			let resize = table.closest('.react-resizable');
 			if (resize) {
-				resize.style.height = windowSize * 30 + 60 + 'px';
+				resize.style.height = windowSize * 30 + 62 + 'px';
 			}
 		}
 	}
@@ -156,7 +114,7 @@ async function doStuff() {
 			if (table.querySelector('#timer_table_server_' + server)) {
 				editTableEntry(table, server);
 			} else {
-				createTableEntry(server)?.forEach((entry) =>
+				createTableEntry(ns, server)?.forEach((entry) =>
 					table.appendChild(entry)
 				);
 			}
@@ -164,33 +122,7 @@ async function doStuff() {
 	}
 }
 
-function createTable() {
-	let headerStyle = {
-		textAlign: 'center',
-		verticalAlign: 'middle',
-		color: 'yellow',
-		backgroundColor: '#333',
-	};
-	return html.createElement(
-		'table',
-		{
-			style: { width: '100%', fontFamily: 'Segoe UI' },
-			id: 'timer_table_main',
-		},
-		html.createElement(
-			'tr',
-			null,
-			html.createElement('th', { style: headerStyle }, ''),
-			html.createElement('th', { style: headerStyle }, 'Server'),
-			html.createElement('th', { style: headerStyle }, 'Operation'),
-			html.createElement('th', { style: headerStyle }, 'Time (min)'),
-			html.createElement('th', { style: headerStyle }, 'Time (max)')
-		)
-	);
-}
-
 function removeTableEntry(hostname) {
-	let doc = eval('document') as Document;
 	let table: any = doc.querySelector('#timer_table_main');
 	if (table) {
 		let server = table.querySelector('#timer_table_server_' + hostname);
@@ -225,15 +157,22 @@ function editTableEntry(table, hostname) {
 		maxTimeNode.textContent = formatTime(maxTime.finishTime - Date.now());
 	}
 	if (progressbar) {
-		progressbar.style.width =
-			((Date.now() - maxTime.timestamp) /
-				(maxTime.finishTime - maxTime.timestamp)) *
-				100 +
-			'%';
+		if (progressbar.finishTime != maxTime.finishTime) {
+			progressbar.animate(
+				[
+					{ width: CSS.percent(0) },
+					{
+						width: CSS.percent(99.5),
+					},
+				],
+				Number(parseInt(maxTime.finishTime) - Date.now())
+			);
+			progressbar.finishTime = maxTime.finishTime;
+		}
 	}
 }
 
-function createTableEntry(server) {
+function createTableEntry(ns, server) {
 	let dataStyle = {
 		textAlign: 'center',
 		verticalAlign: 'middle',
@@ -262,17 +201,26 @@ function createTableEntry(server) {
 			colspan: '5',
 			style: {
 				position: 'absolute',
-				width:
-					((Date.now() - maxTime.timestamp) /
-						(maxTime.finishTime - maxTime.timestamp)) *
-						100 +
-					'%',
 				backgroundColor: '#8CCF27',
-				transition: 'all 1s linear',
+				transition: 'all 1000ms linear',
 			},
 			id: 'timer_table_progressbar_' + server,
 		})
 	);
+	let newTimer: any = progressBar.querySelector(
+		'#timer_table_progressbar_' + server
+	);
+
+	newTimer.animate(
+		[
+			{ width: CSS.percent(0) },
+			{
+				width: CSS.percent(99.5),
+			},
+		],
+		Number(parseInt(maxTime.finishTime) - Date.now())
+	);
+	newTimer.finishTime = maxTime.finishTime;
 
 	let cancelButton = html.createElement(
 		'td',
@@ -353,30 +301,17 @@ function createTableEntry(server) {
 }
 
 function appendToAnchor() {
-	let doc = eval('document') as Document;
-	let node: any = createTable();
-	let anchorDom = doc.querySelector('#' + anchorID);
-	if (anchorDom) {
-		anchorDom.appendChild(node);
-	} else {
-		ns.tprint('could not find anchor dom');
-		setTimeout(() => {
-			appendToAnchor();
-		}, 50);
-	}
-}
-
-function createHTMLAnchor() {
-	ns.printRaw(React.createElement('div', { id: anchorID }));
-	setTimeout(() => {
-		appendToAnchor();
-	}, 0);
-}
-
-function deleteHTMLAnchor() {
-	let doc = eval('document') as Document;
-	let anchor = doc.querySelector('#' + anchorID);
+	let node: HTMLElement = html.createTable();
+	node.appendChild(
+		html.createTableHeader([
+			'',
+			'Server',
+			'Operation',
+			'Time (min)',
+			'Time (max)',
+		])
+	);
 	if (anchor) {
-		anchor.remove();
+		anchor.appendChild(node);
 	}
 }
