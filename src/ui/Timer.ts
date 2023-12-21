@@ -81,7 +81,6 @@ async function doStuff(ns: NS, table: HTMLElement) {
 			}
 		}
 	}
-	// error: rendering problems
 
 	if (table) {
 		Object.keys(data).map((server) => {

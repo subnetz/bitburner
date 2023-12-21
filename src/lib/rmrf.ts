@@ -1,5 +1,4 @@
 import { NS } from '../..';
-import { colors } from '/lib/color';
 
 export async function main(ns: NS) {
 	let args = <string>ns.args[0];

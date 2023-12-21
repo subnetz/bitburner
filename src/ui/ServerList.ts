@@ -23,7 +23,29 @@ export async function main(ns: NS) {
 	let servers = getAllServers(ns);
 	createTableEntries(ns, table, servers);
 
-	while (await ns.asleep(1000)) {}
+	while (await ns.asleep(10000)) {}
+}
+
+function refreshListData(ns) {
+	let servers = getAllServers(ns);
+	servers.forEach((server) => {
+		let node = table.querySelector(
+			'.row._' + server.hostname.replaceAll('.', '_')
+		);
+		let c = node.childNodes;
+		c[0].textContent = server.hasAdminRights ? '🟢' : '🟥';
+		c[1].textContent = server.backdoorInstalled ? '🟢' : '🟥';
+		c[4].textContent = '$' + ns.formatNumber(server.moneyAvailable);
+		c[5].textContent = '$' + ns.formatNumber(server.moneyMax);
+		c[6].textContent = Math.ceil(server.hackDifficulty! * 100) / 100;
+		c[7].textContent = Math.ceil(server.minDifficulty! * 100) / 100;
+		c[8].textContent = formatTime(ns.getWeakenTime(server.hostname));
+		c[6].style.color =
+			server.hackDifficulty == server.minDifficulty ? '#0F0' : 'red';
+		c[8].style.color =
+			server.hackDifficulty == server.minDifficulty ? '#0F0' : 'red';
+	});
+	setRowDisplay(ns);
 }
 
 function setRowDisplay(ns) {
@@ -91,30 +113,48 @@ function createTableEntries(ns: NS, table: HTMLElement, servers: Server[]) {
 			},
 			'▶️'
 		);
+		let operation = !server.hasAdminRights
+			? 'nuke'
+			: server.moneyAvailable == server.moneyMax &&
+			  server.hackDifficulty == server.minDifficulty
+			? 'hack'
+			: 'prepare';
 		hackit.addEventListener('click', (e) => {
 			ns.exec(
 				'lib/addQueue.js',
 				'home',
 				1,
 				'--operation',
-				'prepare',
+				operation,
 				'--target',
 				server.hostname
 			);
+			if (operation == 'nuke') {
+				setTimeout(() => {
+					refreshListData(ns);
+				}, 500);
+			}
+		});
+		let sshit = html.createElement(
+			'td',
+			{
+				style: {
+					color: 'white',
+					textAlign: 'center',
+					verticalAlign: 'middle',
+					backgroundColor: '#333',
+					cursor: 'pointer',
+				},
+			},
+			server.hostname
+		);
+		sshit.addEventListener('click', (e) => {
+			ns.exec('lib/ssh.js', 'home', 1, server.hostname);
 		});
 		let child = html.createElement(
 			'tr',
 			{
-				className: `row _${server.hostname.replaceAll('.', '_')} ${
-					server.purchasedByPlayer ? 'purchased' : ''
-				} ${server.hasAdminRights ? 'root' : ''} ${
-					server.moneyMax ? '' : 'nomoney'
-				} ${
-					hackingSkill >= (server.requiredHackingSkill || 0) &&
-					!server.hasAdminRights
-						? 'hackable'
-						: ''
-				}`,
+				className: `row _${server.hostname.replaceAll('.', '_')}`,
 				style: {
 					display: display,
 				},
@@ -132,7 +172,7 @@ function createTableEntries(ns: NS, table: HTMLElement, servers: Server[]) {
 				server.backdoorInstalled ? '🟢' : '🟥'
 			),
 			hackit,
-			html.createElement('td', { style: style }, server.hostname),
+			sshit,
 			html.createElement(
 				'td',
 				{
@@ -224,6 +264,19 @@ function createButtons(ns): HTMLElement {
 		fontFamily: 'Segoe UI',
 		verticalAlign: 'bottom',
 	};
+	let refreshButton = html.createElement(
+		'button',
+		{
+			type: 'button',
+			id: 'refresh',
+			style: {
+				verticalAlign: 'middle',
+				backgroundColor: '#333',
+				borderRadius: '100%',
+			},
+		},
+		'♻️'
+	);
 	let rootNode = html.createElement('input', {
 		type: 'checkbox',
 		id: 'hasAdmin',
@@ -247,6 +300,9 @@ function createButtons(ns): HTMLElement {
 		id: 'hasMoney',
 		style: { verticalAlign: 'middle' },
 		checked: !!nomoney,
+	});
+	refreshButton.addEventListener('click', (e) => {
+		refreshListData(ns);
 	});
 	rootNode.addEventListener('change', (e) => {
 		let target = <HTMLInputElement>e.target;
@@ -282,6 +338,7 @@ function createButtons(ns): HTMLElement {
 				borderRadius: '8px',
 			},
 		},
+		refreshButton,
 		html.createElement(
 			'div',
 			undefined,

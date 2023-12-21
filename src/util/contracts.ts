@@ -6,7 +6,7 @@ export async function main(ns: NS) {
 	ns.clearLog();
 	args = ns.flags([
 		['test', false],
-		['delete', true],
+		['pick', -1],
 	]);
 	if (args.test) {
 		let test = unittest(ns);
@@ -43,7 +43,12 @@ function unittest(ns: NS) {
 	// clean up
 	if (args.delete) {
 		files.forEach((file) => {
-			ns.rm(file, 'home');
+			if (
+				args.pick == -1 ||
+				types.indexOf(c.getContractType(file)) != args.pick
+			) {
+				ns.rm(file, 'home');
+			}
 		});
 	}
 	return overview;
@@ -111,7 +116,27 @@ function algorithmic_stock_trader_i(data) {}
 function algorithmic_stock_trader_ii(data) {}
 function algorithmic_stock_trader_iii(data) {}
 function algorithmic_stock_trader_iv(data) {}
-function minimum_path_sum_in_a_triangle(data) {}
+function minimum_path_sum_in_a_triangle(data) {
+	let sum = 0;
+	let i = 0;
+	data.forEach((arr) => {
+		if (arr.length == 1) {
+			sum += arr.at(0);
+		} else {
+			if (arr.at(i) < arr.at(i + 1)) {
+				sum += arr.at(i);
+			} else if (arr.at(i) > arr.at(i + 1)) {
+				sum += arr.at(++i);
+			} else {
+				throw new Error(
+					'minimum_path_sum_in_a_triangle:' +
+						'two numbers in a path were the same!'
+				);
+			}
+		}
+	});
+	return sum;
+}
 function unique_paths_in_a_grid_i(data) {}
 function unique_paths_in_a_grid_ii(data) {}
 function shortest_path_in_a_grid(data) {}
