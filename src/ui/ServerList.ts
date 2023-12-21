@@ -78,6 +78,30 @@ function createTableEntries(ns: NS, table: HTMLElement, servers: Server[]) {
 		} else if (!nomoney && !server.moneyMax && !server.purchasedByPlayer) {
 			display = 'none';
 		}
+		let hackit = html.createElement(
+			'td',
+			{
+				style: {
+					color: 'white',
+					textAlign: 'center',
+					verticalAlign: 'middle',
+					backgroundColor: '#333',
+					cursor: 'pointer',
+				},
+			},
+			'▶️'
+		);
+		hackit.addEventListener('click', (e) => {
+			ns.exec(
+				'lib/addQueue.js',
+				'home',
+				1,
+				'--operation',
+				'prepare',
+				'--target',
+				server.hostname
+			);
+		});
 		let child = html.createElement(
 			'tr',
 			{
@@ -107,19 +131,7 @@ function createTableEntries(ns: NS, table: HTMLElement, servers: Server[]) {
 				{ style: style },
 				server.backdoorInstalled ? '🟢' : '🟥'
 			),
-			html.createElement(
-				'td',
-				{
-					style: {
-						color: 'white',
-						textAlign: 'center',
-						verticalAlign: 'middle',
-						backgroundColor: '#333',
-						cursor: 'pointer',
-					},
-				},
-				'▶️'
-			),
+			hackit,
 			html.createElement('td', { style: style }, server.hostname),
 			html.createElement(
 				'td',

@@ -151,6 +151,7 @@ function createTableEntry(ns, server) {
 		textAlign: 'center',
 		verticalAlign: 'middle',
 		backgroundColor: '#111',
+		color: '#0f0',
 	};
 
 	let operations = [...data[server].hacks, ...data[server].prepares].sort(
@@ -163,7 +164,15 @@ function createTableEntry(ns, server) {
 	operations.reverse();
 	let maxTime = operations[0];
 
-	let progressBar = html.createElement(
+	let newTimer: any = html.createElement('td', {
+		colspan: '5',
+		style: {
+			position: 'absolute',
+			backgroundColor: '#8CCF27',
+		},
+		id: 'timer_table_progressbar_' + server,
+	});
+	let progressDiv = html.createElement(
 		'tr',
 		{
 			style: {
@@ -171,20 +180,9 @@ function createTableEntry(ns, server) {
 				height: '2px',
 			},
 		},
-		html.createElement('td', {
-			colspan: '5',
-			style: {
-				position: 'absolute',
-				backgroundColor: '#8CCF27',
-				transition: 'all 1000ms linear',
-			},
-			id: 'timer_table_progressbar_' + server,
-		})
+		newTimer
 	);
-	let newTimer: any = progressBar.querySelector(
-		'#timer_table_progressbar_' + server
-	);
-
+	newTimer.finishTime = maxTime.finishTime;
 	newTimer.animate(
 		[
 			{ width: CSS.percent(0) },
@@ -192,9 +190,11 @@ function createTableEntry(ns, server) {
 				width: CSS.percent(99.5),
 			},
 		],
-		Number(parseInt(maxTime.finishTime) - Date.now())
+		{
+			fill: 'forwards',
+			duration: Number(parseInt(maxTime.finishTime) - Date.now()),
+		}
 	);
-	newTimer.finishTime = maxTime.finishTime;
 
 	let cancelButton = html.createElement(
 		'td',
@@ -270,7 +270,7 @@ function createTableEntry(ns, server) {
 				formatTime(maxTime.finishTime - Date.now())
 			)
 		),
-		progressBar,
+		progressDiv,
 	];
 }
 

@@ -28,7 +28,7 @@ import { doc } from '/lib/html';
 // 	}
 // }
 
-export function main(ns: NS) {
+export async function main(ns: NS) {
 	ns.disableLog('ALL');
 	let files: string[];
 
