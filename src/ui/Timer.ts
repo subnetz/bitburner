@@ -15,7 +15,7 @@ export async function main(ns: NS) {
 	anchor = await html.locateTailWindow(ns);
 	ns.resizeTail(540, 61);
 	ns.moveTail(2300, 2);
-	ns.setTitle('Timer');
+	ns.setTitle('Task Manager');
 	let table = createTable();
 
 	ns.atExit(quit);
@@ -27,7 +27,7 @@ export async function main(ns: NS) {
 }
 
 function quit() {
-	if (anchor) anchor.firstElementChild.remove();
+	if (anchor) anchor.firstElementChild?.remove();
 }
 
 async function doStuff(ns: NS, table: HTMLElement) {
@@ -84,7 +84,11 @@ async function doStuff(ns: NS, table: HTMLElement) {
 
 	if (table) {
 		Object.keys(data).map((server) => {
-			if (table.querySelector('#timer_table_server_' + server)) {
+			if (
+				table.querySelector(
+					'#timer_table_server_' + server.replaceAll('.', '_')
+				)
+			) {
 				editTableEntry(table, server);
 			} else {
 				createTableEntry(ns, server)?.forEach((entry) =>
@@ -98,9 +102,11 @@ async function doStuff(ns: NS, table: HTMLElement) {
 function removeTableEntry(hostname) {
 	let table: any = doc.querySelector('#timer_table_main');
 	if (table) {
-		let server = table.querySelector('#timer_table_server_' + hostname);
+		let server = table.querySelector(
+			'#timer_table_server_' + hostname.replaceAll('.', '_')
+		);
 		let progressbar = table.querySelector(
-			'#timer_table_progressbar_' + hostname
+			'#timer_table_progressbar_' + hostname.replaceAll('.', '_')
 		);
 		try {
 			server.remove();
@@ -110,9 +116,11 @@ function removeTableEntry(hostname) {
 }
 
 function editTableEntry(table, hostname) {
-	let server = table.querySelector('#timer_table_server_' + hostname);
+	let server = table.querySelector(
+		'#timer_table_server_' + hostname.replaceAll('.', '_')
+	);
 	let progressbar = table.querySelector(
-		'#timer_table_progressbar_' + hostname
+		'#timer_table_progressbar_' + hostname.replaceAll('.', '_')
 	);
 	let operations = [...data[hostname].hacks, ...data[hostname].prepares].sort(
 		(a, b) => (a.finishTime > b.finishTime ? 1 : -1)
@@ -231,7 +239,7 @@ function createTableEntry(ns, server) {
 		html.createElement(
 			'tr',
 			{
-				id: 'timer_table_server_' + server,
+				id: 'timer_table_server_' + server.replaceAll('.', '_'),
 			},
 			cancelButton,
 			html.createElement(

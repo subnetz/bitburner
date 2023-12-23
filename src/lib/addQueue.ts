@@ -11,18 +11,46 @@ export async function main(ns: NS) {
 	args = ns.flags([
 		['delay', 500],
 		['target', 'n00dles'],
-		['operation', 'prepare'],
+		['nuke', false],
+		['prepare', false],
+		['hack', false],
+		['auto', false],
 	]);
 	let servers = getAllServers(ns);
-	if (args.operation == 'prepare') {
-		let res = prepareTarget(ns, servers, args.target);
-		if (res.length) ns.toast(res, 'error', 5000);
-	} else if (args.operation == 'nuke') {
-		let res = nukeTarget(ns, servers, args.target);
-		if (res.length) ns.toast(res, 'error', 5000);
-	} else if (args.operation == 'hack') {
-		let res = hackTarget(ns, servers, args.target);
-		if (res.length) ns.toast(res, 'error', 5000);
+	let operation: Function | undefined = undefined;
+	if (args.nuke) {
+		operation = nukeTarget;
+	} else if (args.prepare) {
+		operation = prepareTarget;
+	} else if (args.hack) {
+		operation = hackTarget;
+	}
+	if (operation === undefined || args.auto) {
+		operation = autoOperation(ns, servers, args.target);
+	}
+	let res = operation(ns, servers, args.target);
+	if (res.length) ns.toast(res, 'error', 5000);
+}
+
+function autoOperation(ns: NS, servers: Server[], hostname: string): Function {
+	let targetServer = servers.find((server) => server.hostname == hostname);
+	if (!targetServer?.hasAdminRights) {
+		return nukeTarget;
+	} else if (
+		targetServer.moneyAvailable != targetServer.moneyMax ||
+		targetServer.hackDifficulty != targetServer.minDifficulty
+	) {
+		return prepareTarget;
+	} else if (
+		targetServer.hasAdminRights &&
+		targetServer.moneyAvailable == targetServer.moneyMax &&
+		targetServer.hackDifficulty == targetServer.minDifficulty
+	) {
+		return hackTarget;
+	} else {
+		return (ns: NS, servers: Server[], hostname: string): string => {
+			return `Don't know what to do`;
+		};
 	}
 }
 
@@ -30,7 +58,7 @@ export function autocomplete(data: AutocompleteData) {
 	return data.servers;
 }
 
-function nukeTarget(ns: NS, servers: Server[], hostname: string) {
+function nukeTarget(ns: NS, servers: Server[], hostname: string): string {
 	let targetServer = servers.find((server) => server.hostname == hostname);
 	if (!targetServer) return `Server "${hostname}" not found`;
 	if (targetServer.hasAdminRights)
@@ -73,9 +101,9 @@ function prepareTarget(ns: NS, servers: Server[], hostname: string): string {
 	let targetServer = servers.find((server) => server.hostname == hostname);
 	if (!targetServer) return `Server "${hostname}" not found`;
 	let ramNeeded = 0;
-	let moneyFactor = 2;
-	let moneyAvailable = targetServer.moneyAvailable;
-	let moneyMax = targetServer.moneyMax;
+	let moneyAvailable =
+		targetServer.moneyAvailable! < 10 ? 10 : targetServer.moneyAvailable;
+	let moneyMax = targetServer.moneyMax! < 1 ? 1 : targetServer.moneyMax;
 	let hackDifficulty = targetServer.hackDifficulty;
 	let minDifficulty = targetServer.minDifficulty;
 	let scriptRam_weaken = ns.getScriptRam('util/weaken.js');
@@ -85,10 +113,7 @@ function prepareTarget(ns: NS, servers: Server[], hostname: string): string {
 	if (!hackDifficulty) return `Server "${hostname}" has no hack difficulty`;
 	if (!minDifficulty) return `Server "${hostname}" has no minimum difficulty`;
 
-	let growMultiplier = Math.ceil(
-		moneyMax / (moneyAvailable - moneyAvailable / moneyFactor)
-	);
-
+	let growMultiplier = Math.max(moneyMax / moneyAvailable + 0.1, 2);
 	let threads_grow = Math.ceil(ns.growthAnalyze(hostname, growMultiplier));
 	let security_increase_grow = Math.ceil(threads_grow * growFactor);
 	let threads_weaken_grow = Math.ceil(security_increase_grow / weakenFactor);
@@ -98,6 +123,7 @@ function prepareTarget(ns: NS, servers: Server[], hostname: string): string {
 	ramNeeded += scriptRam_grow * threads_grow;
 	ramNeeded += scriptRam_weaken * threads_weaken_grow;
 	ramNeeded += scriptRam_weaken * threads_weaken_current;
+	// ramNeeded *= 2;
 
 	//let myServers = servers.filter((server) => server.purchasedByPlayer);
 	let myServers = servers
@@ -121,43 +147,59 @@ function prepareTarget(ns: NS, servers: Server[], hostname: string): string {
 	let timeToGrow = ns.getGrowTime(hostname);
 	let timeToWeaken = ns.getWeakenTime(hostname);
 	let growWait = Math.floor(timeToWeaken - timeToGrow - args.delay);
-	let pid1 = ns.exec(
-		'util/grow.js',
-		host.hostname,
-		threads_grow,
-		'--server',
-		hostname,
-		'--delay',
-		growWait
+	let now = Date.now();
+	let pids: number[] = [];
+	pids.push(
+		ns.exec(
+			'util/grow.js',
+			host.hostname,
+			threads_grow,
+			'--server',
+			hostname,
+			'--delay',
+			growWait,
+			'--start',
+			now,
+			'--end',
+			now + timeToWeaken
+		),
+		ns.exec(
+			'util/weaken.js',
+			host.hostname,
+			threads_weaken_grow + threads_weaken_current,
+			'--server',
+			hostname,
+			'--start',
+			now,
+			'--end',
+			now + timeToWeaken
+		)
 	);
-	let pid2 = ns.exec(
-		'util/weaken.js',
-		host.hostname,
-		threads_weaken_grow + threads_weaken_current,
-		'--server',
-		hostname
-	);
+	if (!pids.every((a) => a != 0)) {
+		pids.forEach((p) => ns.kill(p));
+		return `Server "${host.hostname}" occupied (no free RAM)`;
+	}
 
-	let prt = ns.getPortHandle(1);
-	prt.write(
-		JSON.stringify({
-			operation: 'prepare',
-			target: hostname,
-			timestamp: Date.now(),
-			finishTime: Date.now() + timeToWeaken,
-			pids: [
-				{ type: 'grow', pid: pid1 },
-				{ type: 'weaken', pid: pid2 },
-			],
-			threads: [
-				{ type: 'grow', threads: threads_grow },
-				{
-					type: 'weaken',
-					threads: threads_weaken_grow + threads_weaken_current,
-				},
-			],
-		})
-	);
+	// let prt = ns.getPortHandle(1);
+	// prt.write(
+	// 	JSON.stringify({
+	// 		operation: 'prepare',
+	// 		target: hostname,
+	// 		timestamp: now,
+	// 		finishTime: now + timeToWeaken,
+	// 		pids: [
+	// 			{ type: 'grow', pid: pid1 },
+	// 			{ type: 'weaken', pid: pid2 },
+	// 		],
+	// 		threads: [
+	// 			{ type: 'grow', threads: threads_grow },
+	// 			{
+	// 				type: 'weaken',
+	// 				threads: threads_weaken_grow + threads_weaken_current,
+	// 			},
+	// 		],
+	// 	})
+	// );
 	return ``;
 }
 
@@ -166,7 +208,8 @@ function hackTarget(ns: NS, servers: Server[], hostname: string): string {
 	if (!targetServer) return `Server "${hostname}" not found`;
 	let ramNeeded = 0;
 	let moneyFactor = 2;
-	let moneyAvailable = targetServer.moneyAvailable;
+	let moneyAvailable =
+		targetServer.moneyAvailable! < 10 ? 10 : targetServer.moneyAvailable;
 	let moneyMax = targetServer.moneyMax;
 	let hackDifficulty = targetServer.hackDifficulty;
 	let minDifficulty = targetServer.minDifficulty;
@@ -179,7 +222,10 @@ function hackTarget(ns: NS, servers: Server[], hostname: string): string {
 	if (!minDifficulty) return `Server "${hostname}" has no minimum difficulty`;
 
 	let halfMoney = Math.floor(moneyAvailable / moneyFactor);
-	let growMultiplier = Math.ceil(moneyMax / (moneyAvailable - halfMoney));
+	// let growMultiplier = Math.ceil(
+	// 	moneyMax / (moneyAvailable - halfMoney)
+	// );
+	let growMultiplier = moneyFactor + 0.5;
 
 	let threads_hack = Math.floor(ns.hackAnalyzeThreads(hostname, halfMoney));
 	let security_increase_hack = Math.ceil(threads_hack * hackFactor);
@@ -188,10 +234,11 @@ function hackTarget(ns: NS, servers: Server[], hostname: string): string {
 	let security_increase_grow = Math.ceil(threads_grow * growFactor);
 	let threads_weaken_grow = Math.ceil(security_increase_grow / weakenFactor);
 
-	ramNeeded += scriptRam_hack * threads_weaken_hack;
+	ramNeeded += scriptRam_hack * threads_hack;
 	ramNeeded += scriptRam_weaken * threads_weaken_hack;
 	ramNeeded += scriptRam_grow * threads_grow;
 	ramNeeded += scriptRam_weaken * threads_weaken_grow;
+	// ramNeeded *= 2;
 
 	//let myServers = servers.filter((server) => server.purchasedByPlayer);
 	let myServers = servers
@@ -218,55 +265,78 @@ function hackTarget(ns: NS, servers: Server[], hostname: string): string {
 	let hackWait = Math.floor(timeToWeaken - timeToHack - args.delay);
 	let growWait = Math.floor(timeToWeaken - timeToGrow + args.delay);
 	let weakenWait = args.delay * 2;
-	let pid1 = ns.exec(
-		'util/hack.js',
-		host.hostname,
-		threads_hack,
-		'--server',
-		hostname,
-		'--delay',
-		hackWait
+	let now = Date.now();
+	let pids: number[] = [];
+	pids.push(
+		ns.exec(
+			'util/hack.js',
+			host.hostname,
+			threads_hack,
+			'--server',
+			hostname,
+			'--delay',
+			hackWait,
+			'--start',
+			now,
+			'--end',
+			now + timeToWeaken + weakenWait
+		),
+		ns.exec(
+			'util/weaken.js',
+			host.hostname,
+			threads_weaken_hack,
+			'--server',
+			hostname,
+			'--start',
+			now,
+			'--end',
+			now + timeToWeaken + weakenWait
+		),
+		ns.exec(
+			'util/grow.js',
+			host.hostname,
+			threads_grow,
+			'--server',
+			hostname,
+			'--delay',
+			growWait,
+			'--start',
+			now,
+			'--end',
+			now + timeToWeaken + weakenWait
+		),
+		ns.exec(
+			'util/weaken.js',
+			host.hostname,
+			threads_weaken_grow,
+			'--server',
+			hostname,
+			'--delay',
+			weakenWait,
+			'--start',
+			now,
+			'--end',
+			now + timeToWeaken + weakenWait
+		)
 	);
-	let pid2 = ns.exec(
-		'util/weaken.js',
-		host.hostname,
-		threads_grow,
-		'--server',
-		hostname
-	);
-	let pid3 = ns.exec(
-		'util/grow.js',
-		host.hostname,
-		threads_grow,
-		'--server',
-		hostname,
-		'--delay',
-		growWait
-	);
-	let pid4 = ns.exec(
-		'util/weaken.js',
-		host.hostname,
-		threads_weaken_grow,
-		'--server',
-		hostname,
-		'--delay',
-		weakenWait
-	);
-
-	let prt = ns.getPortHandle(1);
-	prt.write(
-		JSON.stringify({
-			operation: 'hack',
-			target: hostname,
-			timestamp: Date.now(),
-			finishTime: Date.now() + timeToWeaken,
-			pids: [
-				{ type: 'hack', pid: pid1 },
-				{ type: 'weaken', pid: pid2 },
-				{ type: 'grow', pid: pid3 },
-				{ type: 'weaken', pid: pid4 },
-			],
-		})
-	);
+	if (!pids.every((a) => a != 0)) {
+		pids.forEach((p) => ns.kill(p));
+		return `Server "${host.hostname}" occupied (no free RAM)`;
+	}
+	// let prt = ns.getPortHandle(1);
+	// prt.write(
+	// 	JSON.stringify({
+	// 		operation: 'hack',
+	// 		target: hostname,
+	// 		timestamp: now,
+	// 		finishTime: now + timeToWeaken + weakenWait,
+	// 		pids: [
+	// 			{ type: 'hack', pid: pid1 },
+	// 			{ type: 'weaken', pid: pid2 },
+	// 			{ type: 'grow', pid: pid3 },
+	// 			{ type: 'weaken', pid: pid4 },
+	// 		],
+	// 	})
+	// );
 	return ``;
 }
